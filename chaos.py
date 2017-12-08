@@ -8,6 +8,7 @@ ASG_GROUP_NAME = "asg_group_name"
 ASG_TERMINATION_TAG = "chaos-termination-prob"
 TERMINATION_UNLEASH_NAME = "unleash_chaos"
 PROBABILITY_NAME = "probability"
+ALERT_ARN_NAME = "sns_alert_arn"
 DEFAULT_PROBABILITY = 1.0 / 6.0  # one in six of hours unit
 
 
@@ -30,10 +31,12 @@ def get_global_probability(default):
 
 
 def run_chaos(regions, default_prob):
+    results = []
     for region in regions:
         asgs = get_asgs(region)
         instances = get_termination_instances(asgs, default_prob)
-        terminate_instances(instances, region)
+        results.append(terminate_instances(instances, region))
+    return results
 
 
 def get_asgs(region):
@@ -84,21 +87,27 @@ def get_termination_instances(asgs, probability):
 
 def terminate_instances(instances, region):
     unleash_chaos = os.environ.get(TERMINATION_UNLEASH_NAME, "").strip()
+    results = []
     for i in instances:
         if not string_to_bool(unleash_chaos):
-            terminate_dry_run(i, region)
+            results.append(terminate_dry_run(i, region))
         else:
-            terminate_no_point_of_return(i, region)
+            results.append(terminate_no_point_of_return(i, region))
+    return results
 
 
 def terminate_dry_run(instance, region):
-    printlog("Terminuate[DRY-RUN]", instance[1], "from", instance[0], "in", region)
+    result = "Terminuate[DRY-RUN]", instance[1], "from", instance[0], "in", region
+    printlog(result)
+    return result
 
 
 def terminate_no_point_of_return(instance, region):
     ec2 = boto3.client("ec2", region_name=region)
     ec2.terminate_instances(InstanceIds=[instance[1]])
-    printlog("TERMINATE", instance[1], "from", instance[0], "in", region)
+    result = "TERMINATE", instance[1], "from", instance[0], "in", region
+    printlog(result)
+    return result
 
 
 def printlog(*args):
@@ -136,6 +145,16 @@ def convert_valid_prob_float(value, default):
 
     return value
 
+def alert(data):
+    alert_arn = os.environ.get(ALERT_ARN_NAME, '').strip()
+    if len(alert_arn) > 0 and data:
+        sns_client = boto3.client('sns')
+        title = "Choas Engineer Team"
+        message = 'Here is list of jobs we have done \n'
+        message += ''.join(['\n * ' + d for d in data])
+        sns_client.publish(TopicArn=alert_arn,
+                           Subject=title,
+                           Message = message)
 
 def handler(event, context):
     """
@@ -143,4 +162,5 @@ def handler(event, context):
     """
     regions = get_regions(context)
     global_prob = get_global_probability(DEFAULT_PROBABILITY)
-    run_chaos(regions, global_prob)
+    result = run_chaos(regions, global_prob)
+    alert(result)
