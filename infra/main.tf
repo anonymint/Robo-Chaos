@@ -144,5 +144,4 @@ resource "aws_sns_topic_subscription" "lambda_sub" {
 
 provider "aws" {
   region  = "us-east-1"
-  profile = "saml"
 }
