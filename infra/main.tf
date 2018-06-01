@@ -1,14 +1,6 @@
 ###
 # Lambda Role Policy
 ###
-module "iam_assume_role" {
-  source                        = "anonymint/iam-role/aws"
-  role_name                     = "lambda-chaos-monkey-execution-role"
-  policy_arns_count             = "3"
-  policy_arns                   = ["arn:aws:iam::152303423357:policy/sre/chaos_monkey", "arn:aws:iam::aws:policy/AWSOpsWorksCloudWatchLogs", "arn:aws:iam::aws:policy/AmazonSNSFullAccess"]
-  create_instance_role          = false
-  iam_role_policy_document_json = "${data.aws_iam_policy_document.lambda_role_policy.json}"
-}
 
 module "iam_assume_role_basic_execution" {
   source                        = "anonymint/iam-role/aws"
@@ -17,6 +9,73 @@ module "iam_assume_role_basic_execution" {
   policy_arns                   = ["arn:aws:iam::aws:policy/AWSOpsWorksCloudWatchLogs"]
   create_instance_role          = false
   iam_role_policy_document_json = "${data.aws_iam_policy_document.lambda_role_policy.json}"
+}
+
+resource "aws_iam_role" "lambda_role_accross_account" {
+  name = "chaos-across-account"
+
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy" "role_policy_assume_role" {
+  count = "${length(split(",", var.target_accounts))}"
+  name  = "assume_role_target_${count.index}"
+  role  = "${aws_iam_role.lambda_role_accross_account.id}"
+
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": "sts:AssumeRole",
+            "Resource": "arn:aws:iam::${element(split(",", var.target_accounts), count.index)}:role/chaos-engineer"
+        }
+    ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy" "logs_related_policy" {
+  name = "logs_related_policy"
+  role = "${aws_iam_role.lambda_role_accross_account.id}"
+
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Action": [
+                "sns:*"
+            ],
+            "Effect": "Allow",
+            "Resource": "*"
+        }
+    ]
+}
+EOF
 }
 
 # ROLE Policy
@@ -42,51 +101,92 @@ data "aws_iam_policy_document" "lambda_role_policy" {
 # Lambda function
 ###
 
+# resource "null_resource" "dependencies" {
+#   triggers {
+#     run = "${uuid()}"
+#   }  
+#   provisioner "local-exec" {
+#     command = "pip install -r ${path.module}/../python_lib/requirements.txt -t ${path.module}/../python_lib/.tmp > output.txt 2>&1"
+#   }
+# }
+
+# resource "null_resource" "zip_packages" {
+#   triggers {
+#     run = "${uuid()}"
+#   }  
+#   provisioner "local-exec" {
+#     command = "(cd ${path.module}/../python_lib && make run)"
+#   }
+# }
+
 data "archive_file" "lambda_zip" {
-  type        = "zip"
-  source_file = "${path.module}/../chaos.py"
-  output_path = "${path.module}/chaos_package.zip"
+  type = "zip"
+
+  source {
+    content  = "${file("${path.module}/../src/chaos.py")}"
+    filename = "chaos.py"
+  }
+
+  source {
+    content  = "${file("${path.module}/../src/helper.py")}"
+    filename = "helper.py"
+  }
+
+  source {
+    content  = "${file("${path.module}/../src/tasks.py")}"
+    filename = "tasks.py"
+  }
+
+  # source_file = "${path.module}/../python_lib/chaos.py"
+  output_path = "${path.module}/../src/out/chaos_package.zip"
 }
 
 resource "aws_lambda_function" "chaos_lambda" {
-  function_name    = "chaos_monkey"
-  handler          = "chaos.handler"
-  role             = "${module.iam_assume_role.this_iam_role_arn}"
+  function_name = "chaos_monkey"
+  handler       = "chaos.handler"
+
+  //  role             = "${module.iam_assume_role.this_iam_role_arn}"
+  role             = "${aws_iam_role.lambda_role_accross_account.arn}"
   runtime          = "python3.6"
-  source_code_hash = "${data.archive_file.lambda_zip.output_base64sha256}"
-  filename         = "${path.module}/chaos_package.zip"
+  source_code_hash = "${data.archive_file.lambda_zip.output_sha}"
+  filename         = "${data.archive_file.lambda_zip.output_path}"
+  timeout          = 6
 
   environment {
     variables {
-      region         = "us-east-1,us-west-2"
-      probability    = "1"
-      unleash_chaos  = "no"
-      asg_group_name = "monkey_target"
-      sns_alert_arn  = "${aws_sns_topic.alert.arn}"
+      target_accounts = "${var.target_accounts}"
+      regions         = "${var.target_regions}"
+      probability     = "${var.prob}"
+      unleash_chaos   = "no"
+      asg_group_name  = ""
+      sns_alert_arn   = "${aws_sns_topic.alert.arn}"
     }
   }
 }
 
 resource "aws_lambda_permission" "allow_cloudwatch" {
+  count         = "${length(var.schedule_run)}"
   action        = "lambda:InvokeFunction"
   function_name = "${aws_lambda_function.chaos_lambda.function_name}"
   principal     = "events.amazonaws.com"
-  statement_id  = "AlowExecutionFromCloudWatch"
-  source_arn    = "${aws_cloudwatch_event_rule.scheduler.arn}"
+  statement_id  = "AlowExecutionFromCloudWatch-${count.index}"
+  source_arn    = "${aws_cloudwatch_event_rule.scheduler.*.arn[count.index]}"
 }
 
 ###
 # CloudWatch
 ###
 resource "aws_cloudwatch_event_rule" "scheduler" {
-  name                = "chaos_scheduler"
+  count               = "${length(var.schedule_run)}"
+  name                = "chaos_scheduler-${count.index}"
   description         = "This rule will trigger Lambda 9-3 5 days a week"
-  schedule_expression = "cron(0/5 15-21 ? * MON-FRI *)"
+  schedule_expression = "${element(var.schedule_run, count.index)}"
 }
 
 resource "aws_cloudwatch_event_target" "target" {
-  arn  = "${aws_lambda_function.chaos_lambda.arn}"
-  rule = "${aws_cloudwatch_event_rule.scheduler.name}"
+  count = "${length(var.schedule_run)}"
+  arn   = "${aws_lambda_function.chaos_lambda.arn}"
+  rule  = "${aws_cloudwatch_event_rule.scheduler.*.name[count.index]}"
 }
 
 resource "aws_cloudwatch_log_group" "lambda_log_group" {
@@ -100,8 +200,8 @@ resource "aws_cloudwatch_log_group" "lambda_log_group" {
 # TODO send alert if killing happen
 data "archive_file" "microsoft_connector_zip" {
   type        = "zip"
-  source_file = "${path.module}/hook.py"
-  output_path = "${path.module}/hook_package.zip"
+  source_file = "${path.module}/../src/hook.py"
+  output_path = "${path.module}/../src/out/hook_package.zip"
 }
 
 resource "aws_lambda_function" "hook_lambda" {
@@ -143,5 +243,6 @@ resource "aws_sns_topic_subscription" "lambda_sub" {
 # TODO keep information in SDB or Dynamodb or whatnot as same as SimianMonkey
 
 provider "aws" {
-  region  = "us-east-1"
+  region  = "${var.region}"
+  profile = "${var.profile}"
 }

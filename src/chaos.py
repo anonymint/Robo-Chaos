@@ -1,7 +1,8 @@
 import os
 import random
-from time import strftime, gmtime
 import boto3
+from tasks import *
+from helper import *
 
 REGIONS_VAIRABLE_NAME = "regions"
 ASG_GROUP_NAME = "asg_group_name"
@@ -9,7 +10,16 @@ ASG_TERMINATION_TAG = "chaos-termination-prob"
 TERMINATION_UNLEASH_NAME = "unleash_chaos"
 PROBABILITY_NAME = "probability"
 ALERT_ARN_NAME = "sns_alert_arn"
+TARGET_ACCOUNT_NAME = "target_accounts"
 DEFAULT_PROBABILITY = 1.0 / 6.0  # one in six of hours unit
+
+
+def get_target_account(context):
+    targets = os.environ.get(TARGET_ACCOUNT_NAME, "").strip()
+    if len(targets) > 0:
+        return [t.strip() for t in targets.split(",")]
+    else:
+        return [context.invoked_function_arn.split(":")[4]]
 
 
 def get_regions(context):
@@ -30,18 +40,19 @@ def get_global_probability(default):
     return convert_valid_prob_float(prob, default)
 
 
-def run_chaos(regions, default_prob):
+def run_chaos(accounts, regions, default_prob):
     results = []
-    for region in regions:
-        asgs = get_asgs(region)
-        instances = get_termination_instances(asgs, default_prob)
-        results.append(terminate_instances(instances, region))
+    for account in accounts:
+        for region in regions:
+            asgs = get_asgs(account, region)
+            instances = get_termination_instances(asgs, default_prob)
+            results.extend(run_chaos_each_account_region(account, instances, region))
     return results
 
 
-def get_asgs(region):
+def get_asgs(account, region):
     given_asg = os.environ.get(ASG_GROUP_NAME, "").strip()
-    asgs = boto3.client("autoscaling", region_name=region)
+    asgs = assumRole(account, "autoscaling", region)
     for res in asgs.get_paginator("describe_auto_scaling_groups").paginate():
         for asg in res.get("AutoScalingGroups", []):
             if len(given_asg) > 0:
@@ -85,34 +96,13 @@ def get_termination_instances(asgs, probability):
     return termination_instances
 
 
-def terminate_instances(instances, region):
+def run_chaos_each_account_region(account, instances, region):
     unleash_chaos = os.environ.get(TERMINATION_UNLEASH_NAME, "").strip()
     results = []
     for i in instances:
-        if not string_to_bool(unleash_chaos):
-            results.append(terminate_dry_run(i, region))
-        else:
-            results.append(terminate_no_point_of_return(i, region))
+        result = calling_tasks_random(account, i, region, dryrun=(not string_to_bool(unleash_chaos)))
+        results.append(result)
     return results
-
-
-def terminate_dry_run(instance, region):
-    result = "Terminuate[DRY-RUN]", instance[1], "from", instance[0], "in", region
-    printlog(result)
-    return result
-
-
-def terminate_no_point_of_return(instance, region):
-    ec2 = boto3.client("ec2", region_name=region)
-    ec2.terminate_instances(InstanceIds=[instance[1]])
-    result = "TERMINATE", instance[1], "from", instance[0], "in", region
-    printlog(result)
-    return result
-
-
-def printlog(*args):
-    current = strftime("%Y-%m-%d %H:%M:%SZ", gmtime())
-    print(current, *args)
 
 
 def string_to_bool(s):
@@ -145,6 +135,7 @@ def convert_valid_prob_float(value, default):
 
     return value
 
+
 def alert(data):
     alert_arn = os.environ.get(ALERT_ARN_NAME, '').strip()
     if len(alert_arn) > 0 and data:
@@ -154,13 +145,39 @@ def alert(data):
         message += ''.join(['\n * ' + d for d in data])
         sns_client.publish(TopicArn=alert_arn,
                            Subject=title,
-                           Message = message)
+                           Message=message)
 
+
+def assumRole(account, service, region):
+    sts_client = boto3.client('sts')
+    assumeRoleObject = sts_client.assume_role(
+        RoleArn='arn:aws:iam::' + account + ':role/chaos-engineer',
+        RoleSessionName='AssumeRoleChaosEngineer'
+    )
+
+    credentials = assumeRoleObject['Credentials']
+    client = boto3.client(
+        service,
+        region_name=region,
+        aws_access_key_id=credentials['AccessKeyId'],
+        aws_secret_access_key=credentials['SecretAccessKey'],
+        aws_session_token=credentials['SessionToken'],
+    )
+    return client
+
+"""
+Main Handler function
+"""
 def handler(event, context):
     """
     Main Lambda function
     """
+    accounts = get_target_account(context)
     regions = get_regions(context)
     global_prob = get_global_probability(DEFAULT_PROBABILITY)
-    result = run_chaos(regions, global_prob)
+    result = run_chaos(accounts, regions, global_prob)
     alert(result)
+
+if __name__ == '__main__':
+    calling_tasks_random("152303423357", ["asg","i-06d3fe93310a66d69"], "us-east-1", dryrun=True)
+    # max_cpu_worker("152303423357", ["asg","i-06d3fe93310a66d69"], "us-east-1", dryrun=False)
