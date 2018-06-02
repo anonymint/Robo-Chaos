@@ -182,7 +182,4 @@ def handler(event, context):
     global_prob = get_global_probability(DEFAULT_PROBABILITY)
     result = run_chaos(accounts, regions, global_prob)
     alert(result)
-
-# if __name__ == '__main__':
-#     calling_tasks_random("152303423357", ["asg","i-06d3fe93310a66d69"], "us-east-1", dryrun=True)
-# max_cpu_worker("152303423357", ["asg","i-06d3fe93310a66d69"], "us-east-1", dryrun=False)
+    return result

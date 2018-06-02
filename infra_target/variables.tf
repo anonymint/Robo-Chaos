@@ -9,4 +9,5 @@ variable "master_account" {
 
 variable "region" {
   description = "Default region to run script"
+  default     = "us-east-1"
 }

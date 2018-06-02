@@ -3,22 +3,14 @@ from urllib.request import Request
 import urllib.error as error
 import os
 
-data_template_default = '{{"title": "{}","text": "{}"}}'
-hook_url = None
 HOOK_URL_NAME = "hook_url"
 
-
-def initial():
-    # set up hook url
+def send_slack_hook(event, context):
+    data_template_default = '{{"text": "*{}*\n {}"}}'
     url = os.environ.get(HOOK_URL_NAME, "").strip()
-    if len(url) > 0:
-        global hook_url
-        hook_url = url
-    else:
+    if len(url) == 0:
         raise Exception('No hook url provided via Environment', HOOK_URL_NAME)
 
-
-def send_hook(event, context):
     headers = {'Content-Type': 'application/json'}
     for record in event['Records']:
         sns = record['Sns']
@@ -36,9 +28,9 @@ def send_hook(event, context):
             raise Exception('status:', e.code, 'reason:', e.reason, 'url:', e.url)
 
 
+
 def handler(event, context):
     """
     Main Lambda function
     """
-    initial()
-    send_hook(event, context)
+    send_slack_hook(event, context)

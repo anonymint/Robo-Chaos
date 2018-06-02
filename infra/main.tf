@@ -101,24 +101,6 @@ data "aws_iam_policy_document" "lambda_role_policy" {
 # Lambda function
 ###
 
-# resource "null_resource" "dependencies" {
-#   triggers {
-#     run = "${uuid()}"
-#   }  
-#   provisioner "local-exec" {
-#     command = "pip install -r ${path.module}/../python_lib/requirements.txt -t ${path.module}/../python_lib/.tmp > output.txt 2>&1"
-#   }
-# }
-
-# resource "null_resource" "zip_packages" {
-#   triggers {
-#     run = "${uuid()}"
-#   }  
-#   provisioner "local-exec" {
-#     command = "(cd ${path.module}/../python_lib && make run)"
-#   }
-# }
-
 data "archive_file" "lambda_zip" {
   type = "zip"
 
@@ -157,8 +139,8 @@ resource "aws_lambda_function" "chaos_lambda" {
       target_accounts = "${var.target_accounts}"
       regions         = "${var.target_regions}"
       probability     = "${var.prob}"
-      unleash_chaos   = "no"
-      asg_group_name  = ""
+      unleash_chaos   = "${var.unleash}"
+      asg_group_name  = "${var.asg_group_names}"
       sns_alert_arn   = "${aws_sns_topic.alert.arn}"
     }
   }
@@ -197,7 +179,6 @@ resource "aws_cloudwatch_log_group" "lambda_log_group" {
 ###
 # Alert
 ###
-# TODO send alert if killing happen
 data "archive_file" "microsoft_connector_zip" {
   type        = "zip"
   source_file = "${path.module}/../src/hook.py"

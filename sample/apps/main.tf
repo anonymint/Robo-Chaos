@@ -55,6 +55,26 @@ resource "aws_iam_role" "chaos_apps_role" {
 EOF
 }
 
+resource "aws_security_group" "web_sg" {
+  name        = "web_only80_sg"
+  description = "web insecure only port 80 ingress"
+  vpc_id      = "${var.aws_vpc_id}"
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
 resource "aws_iam_role_policy_attachment" "chaos_apps_attach" {
   role       = "${aws_iam_role.chaos_apps_role.name}"
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM"
@@ -82,6 +102,7 @@ resource "aws_launch_configuration" "lc" {
   amazon-linux-extras install nginx1.12
   systemctl start nginx
   systemctl enable nginx
+  wget -O /usr/share/nginx/html/nginx-logo.png https://nginx.org/nginx.png
   EOF
 
   lifecycle {
@@ -110,22 +131,12 @@ resource "aws_autoscaling_group" "this" {
   }
 }
 
-//resource "aws_lb" "chaos_monkey_alb" {
-//  name               = "chaos-monkey-alb"
-//  internal           = false
-//  load_balancer_type = "application"
-//  availability_zones = ["${data.aws_subnet.subnet.*.availability_zone}"]//["us-west-2a", "us-west-2b", "us-west-2c"]
-//  security_groups = ["${data.aws_security_group.security_default_group.id}"]
-//
-//  enable_deletion_protection = true
-//}
-
 # Create a new load balancer
 resource "aws_elb" "chaos_monkey_elb" {
   name = "chaos-monkey-elb"
 
-  availability_zones = ["${data.aws_subnet.subnet.*.availability_zone}"]        //["us-west-2a", "us-west-2b", "us-west-2c"]
-  security_groups    = ["${data.aws_security_group.security_default_group.id}"]
+  availability_zones = ["${data.aws_subnet.subnet.*.availability_zone}"]
+  security_groups    = ["${data.aws_security_group.security_default_group.id}", "${aws_security_group.web_sg.id}"]
 
   listener {
     instance_port     = 80
@@ -168,6 +179,10 @@ variable profile {
 
 variable "aws_vpc_id" {
   description = "VPC ID you want to create this ASG"
+}
+
+output "elb_dns" {
+  value = "${aws_elb.chaos_monkey_elb.dns_name}"
 }
 
 provider "aws" {

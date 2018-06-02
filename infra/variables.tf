@@ -5,6 +5,7 @@ variable profile {
 
 variable "hook_url" {
   description = "The Microsoft team hook url"
+  default     = "http://chaos.requestcatcher.com/test"
 }
 
 variable "region" {
@@ -12,8 +13,8 @@ variable "region" {
 }
 
 variable "prob" {
-  description = "probability to kill instance 1 means all the time, 0.13 ~ 1/6 or once in sixth appproximately"
-  default     = 0.13
+  description = "probability to kill instance 1 means all the time, 0.17 ~ 1/7 or once in seventh appproximately"
+  default     = 0.14
 }
 
 variable "target_regions" {
@@ -23,6 +24,16 @@ variable "target_regions" {
 
 variable "target_accounts" {
   description = "target accounts separate by comma 12345,1232,12312 for example"
+}
+
+variable "unleash" {
+  description = "Unleash Chaos, default is no or DRYRUN mode"
+  default     = "no"
+}
+
+variable "asg_group_names" {
+  description = "List of ASG group that will opt in, default is blank means ALL"
+  default     = ""
 }
 
 variable "schedule_run" {
