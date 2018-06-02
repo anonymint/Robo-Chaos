@@ -20,7 +20,7 @@ def send_slack_hook(event, context):
         print(data)
         data_encoded = data.encode('utf-8')
         try:
-            req = Request(hook_url, headers=headers, method='POST',
+            req = Request(url, headers=headers, method='POST',
                           data=data_encoded)
             res = urlopen(req)
             print(res)
