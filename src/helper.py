@@ -1,3 +1,4 @@
+import boto3
 from time import strftime, gmtime
 
 def printlog(*args):

@@ -108,12 +108,3 @@ provider "aws" {
   region  = "${var.region}"
   profile = "${var.profile}"
 }
-
-terraform {
-  backend "s3" {
-    encrypt = "true"
-    bucket  = "chaos-engineer-target"
-    key     = "chaos/terraform.tfstate"
-    region  = "us-east-1"
-  }
-}

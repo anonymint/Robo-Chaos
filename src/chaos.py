@@ -1,8 +1,7 @@
 import os
-import random
 import boto3
-from tasks import *
-from helper import *
+import random
+import tasks as tasks
 
 REGIONS_VAIRABLE_NAME = "regions"
 ASG_GROUP_NAME = "asg_group_name"
@@ -45,14 +44,15 @@ def run_chaos(accounts, regions, default_prob):
     for account in accounts:
         for region in regions:
             asgs = get_asgs(account, region)
-            instances = get_termination_instances(asgs, default_prob)
-            results.extend(run_chaos_each_account_region(account, instances, region))
+            instances = get_instances_randomly(asgs, default_prob)
+            results.extend(
+                run_chaos_each_account_region(account, instances, region))
     return results
 
 
 def get_asgs(account, region):
     given_asg = os.environ.get(ASG_GROUP_NAME, "").strip()
-    asgs = assumRole(account, "autoscaling", region)
+    asgs = assumeRole(account, "autoscaling", region)
     for res in asgs.get_paginator("describe_auto_scaling_groups").paginate():
         for asg in res.get("AutoScalingGroups", []):
             if len(given_asg) > 0:
@@ -79,7 +79,7 @@ def get_probability(asg, default):
     return convert_valid_prob_float(custom_prob, default)
 
 
-def get_termination_instances(asgs, probability):
+def get_instances_randomly(asgs, probability):
     termination_instances = []
     for asg in asgs:
         instances = asg.get("Instances", [])
@@ -89,9 +89,10 @@ def get_termination_instances(asgs, probability):
         asg_prob = get_probability(asg, probability)
         # if asg_prob > random_figture then pick one to destroy
         if asg_prob > random.random():
+            # filter only InService instance
+            instances = list(filter(lambda e: e['LifecycleState'] == 'InService',instances))
             instance_id = random.choice(instances).get("InstanceId", None)
-            termination_instances.append(
-                (asg["AutoScalingGroupName"], instance_id))
+            termination_instances.append((asg["AutoScalingGroupName"], instance_id))
 
     return termination_instances
 
@@ -100,7 +101,8 @@ def run_chaos_each_account_region(account, instances, region):
     unleash_chaos = os.environ.get(TERMINATION_UNLEASH_NAME, "").strip()
     results = []
     for i in instances:
-        result = calling_tasks_random(account, i, region, dryrun=(not string_to_bool(unleash_chaos)))
+        result = tasks.calling_tasks_random(account, i, region, dryrun=(
+            not string_to_bool(unleash_chaos)))
         results.append(result)
     return results
 
@@ -148,7 +150,7 @@ def alert(data):
                            Message=message)
 
 
-def assumRole(account, service, region):
+def assumeRole(account, service, region):
     sts_client = boto3.client('sts')
     assumeRoleObject = sts_client.assume_role(
         RoleArn='arn:aws:iam::' + account + ':role/chaos-engineer',
@@ -165,9 +167,12 @@ def assumRole(account, service, region):
     )
     return client
 
+
 """
 Main Handler function
 """
+
+
 def handler(event, context):
     """
     Main Lambda function
@@ -178,6 +183,6 @@ def handler(event, context):
     result = run_chaos(accounts, regions, global_prob)
     alert(result)
 
-if __name__ == '__main__':
-    calling_tasks_random("152303423357", ["asg","i-06d3fe93310a66d69"], "us-east-1", dryrun=True)
-    # max_cpu_worker("152303423357", ["asg","i-06d3fe93310a66d69"], "us-east-1", dryrun=False)
+# if __name__ == '__main__':
+#     calling_tasks_random("152303423357", ["asg","i-06d3fe93310a66d69"], "us-east-1", dryrun=True)
+# max_cpu_worker("152303423357", ["asg","i-06d3fe93310a66d69"], "us-east-1", dryrun=False)

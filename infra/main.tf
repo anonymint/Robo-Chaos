@@ -210,7 +210,7 @@ resource "aws_lambda_function" "hook_lambda" {
   role             = "${module.iam_assume_role_basic_execution.this_iam_role_arn}"
   runtime          = "python3.6"
   source_code_hash = "${data.archive_file.microsoft_connector_zip.output_base64sha256}"
-  filename         = "${path.module}/hook_package.zip"
+  filename         = "${path.module}/../src/out/hook_package.zip"
 
   environment {
     variables {
