@@ -51,7 +51,7 @@ def max_cpu_worker(account, instance, region, dryrun=True):
 
 
 TASKS = [
-    (terminate_instance_worker, "Terminate instances"),
+    (terminate_instance_worker, "Terminate"),
     (max_cpu_worker, "Max out CPU")
 ]
 

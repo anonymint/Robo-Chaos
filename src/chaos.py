@@ -44,7 +44,7 @@ def run_chaos(accounts, regions, default_prob):
     for account in accounts:
         for region in regions:
             asgs = get_asgs(account, region)
-            instances = get_instances_randomly(asgs, default_prob)
+            instances = get_instances_randomly(account, region, asgs, default_prob)
             results.extend(
                 run_chaos_each_account_region(account, instances, region))
     return results
@@ -79,18 +79,25 @@ def get_probability(asg, default):
     return convert_valid_prob_float(custom_prob, default)
 
 
-def get_instances_randomly(asgs, probability):
+def get_instances_randomly(account, region, asgs, probability):
     termination_instances = []
+    ec2_client = assumeRole(account, "ec2", region)
     for asg in asgs:
         instances = asg.get("Instances", [])
+        if len(instances) == 0:
+            continue
+
+        # isntance-state-code == 16 is running http://boto3.readthedocs.io/en/latest/reference/services/ec2.html#EC2.Client.describe_instance_status
+        running_instances = ec2_client.describe_instance_status(Filters=[{'Name': 'instance-state-code', 'Values': ['16']}], InstanceIds=[i['InstanceId'] for i in instances])
+        instances = list(filter(lambda e: e['InstanceId'] in [e['InstanceId'] for e in running_instances['InstanceStatuses']], instances))
+
+        # after filter only instances with running state, if size is > 0 go ahead
         if len(instances) == 0:
             continue
 
         asg_prob = get_probability(asg, probability)
         # if asg_prob > random_figture then pick one to destroy
         if asg_prob > random.random():
-            # filter only InService instance
-            instances = list(filter(lambda e: e['LifecycleState'] == 'InService',instances))
             instance_id = random.choice(instances).get("InstanceId", None)
             termination_instances.append((asg["AutoScalingGroupName"], instance_id))
 
