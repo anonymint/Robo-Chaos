@@ -1,6 +1,6 @@
 # Sample 
 
-There are 2 files `run.sh` and `teardown.sh` as the name suggested 
+There are 2 files `run.sh` and `teardown.sh` as the name suggested, just run this script in this path! 
 
 ### Run
 
@@ -33,6 +33,9 @@ echo "Builder Master Account role and etc"
 (cd ../infra && terraform init && terraform get)
 (cd ../infra && terraform apply -auto-approve -var-file="config/master.tfvar")
 ```
+
+just a simple click
+[![asciicast](https://asciinema.org/a/27WE9BqbQqlpsdmq42v1pBoVr.png)](https://asciinema.org/a/27WE9BqbQqlpsdmq42v1pBoVr)
 
 ### Teardown
 
