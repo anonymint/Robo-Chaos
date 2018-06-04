@@ -1,4 +1,6 @@
-# Chaos-Lambda
+# Robo Chaos
+Idea is I have RoboChaos machines to help me automate the chaos scenario!
+
 From Simian Army to Lambda serverless 
 
 This is an attempt to port [SimianArmy](https://github.com/Netflix/SimianArmy) to serverless model with AWS Lambda inspired from [Chaos Lambda](https://github.com/bbc/chaos-lambda)
