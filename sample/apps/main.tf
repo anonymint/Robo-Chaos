@@ -90,7 +90,7 @@ resource "aws_launch_configuration" "lc" {
   iam_instance_profile = "${aws_iam_instance_profile.chaos_apps_profile.name}"
   security_groups      = ["${data.aws_security_group.security_default_group.id}"]
 
-  key_name = "anonymint-only"
+  # key_name = "YOUR_KEY_IF_NEED_SSH_ACCESS"
 
   root_block_device {
     delete_on_termination = true
