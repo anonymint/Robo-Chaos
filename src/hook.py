@@ -5,7 +5,14 @@ import os
 
 HOOK_URL_NAME = "hook_url"
 
+
 def send_slack_hook(event, context):
+    """
+    Given hook_url, this lambda once get SNS object, reformat and post hook_url
+
+    :param event: SNS event
+    :type event: JSON dict
+    """
     data_template_default = '{{"text": "*{}*\n {}"}}'
     url = os.environ.get(HOOK_URL_NAME, "").strip()
     if len(url) == 0:
@@ -26,7 +33,6 @@ def send_slack_hook(event, context):
             print(res)
         except error.HTTPError as e:
             raise Exception('status:', e.code, 'reason:', e.reason, 'url:', e.url)
-
 
 
 def handler(event, context):

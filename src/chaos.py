@@ -2,6 +2,7 @@ import os
 import boto3
 import random
 import tasks as tasks
+import helper as helper
 
 REGIONS_VAIRABLE_NAME = "regions"
 ASG_GROUP_NAME = "asg_group_name"
@@ -109,17 +110,9 @@ def run_chaos_each_account_region(account, instances, region):
     results = []
     for i in instances:
         result = tasks.calling_tasks_random(account, i, region, dryrun=(
-            not string_to_bool(unleash_chaos)))
+            not helper.string_to_bool(unleash_chaos)))
         results.append(result)
     return results
-
-
-def string_to_bool(s):
-    if s.lower() in ["true", "t", "yes", "yeah", "yup", "y", "certainly",
-                     "sure", "1"]:
-        return True
-    else:
-        return False
 
 
 def convert_valid_prob_float(value, default):
@@ -146,6 +139,12 @@ def convert_valid_prob_float(value, default):
 
 
 def alert(data):
+    """
+    Passing list of Tasks that has been executing or DRY-RUN to publish on SNS
+
+    :param data: message
+    :type List of str
+    """
     alert_arn = os.environ.get(ALERT_ARN_NAME, '').strip()
     if len(alert_arn) > 0 and data:
         sns_client = boto3.client('sns')
@@ -158,6 +157,20 @@ def alert(data):
 
 
 def assumeRole(account, service, region):
+    """
+
+    This function is used for master-target account perspective, to assume role
+    in the target account to do the work
+
+    :param account: 13 digit aws account to assume the role
+    :type account: str
+    :param service: AWS service client
+    :type service: str
+    :param region: Region you want to setup client into
+    :type region: str
+    :return: Client object
+    :rtype: Boto3 Client
+    """
     sts_client = boto3.client('sts')
     assumeRoleObject = sts_client.assume_role(
         RoleArn='arn:aws:iam::' + account + ':role/chaos-engineer',
