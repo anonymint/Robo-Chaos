@@ -1,4 +1,7 @@
 # Robo Chaos
+
+As of June 7th, I gave a talk at [AWS Community Day Midwest](https://www.eventbrite.com/e/aws-community-day-midwest-tickets-45049510298#) and [slide](asset/Chaos_Engineer_Chicago_Community_Day.pdf) 
+
 Idea is I have RoboChaos machines to help me automate the chaos scenario!
 
 From Simian Army to Lambda serverless 
