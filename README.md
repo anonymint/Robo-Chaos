@@ -1,3 +1,5 @@
+
+
 # Robo Chaos
 
 As of June 7th, I gave a talk at [AWS Community Day Midwest](https://www.eventbrite.com/e/aws-community-day-midwest-tickets-45049510298#) and [slide](asset/Chaos_Engineer_Chicago_Community_Day.pdf) 
@@ -20,23 +22,25 @@ Once you have master account, it's time to create `Target` accounts, with one Ma
 
 Lastly, depend on your current scenario, if you're already have ASG setup with EC2 and SSM policy `arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM` attached to EC2 profile. Again in the `/sample` has been prepared for Master and Target account to be the same plus sample nginx application behind ELB with 2 T2micro instances.     
 
+> **Note:** By default, the Lambda runs in dry-run mode. To actually trigger chaos events, set the `unleash_chaos` environment variable to `true` in your Lambda function configuration.
+
 Code Structure
 ```
 ├── infra # this is for Master Account
-│   ├── config
-│   │   └── master.tfvar
-│   ├── main.tf
-│   ├── outputs.tf
-│   └── variables.tf
+│   ├── config
+│   │   └── master.tfvar
+│   ├── main.tf
+│   ├── outputs.tf
+│   └── variables.tf
 ├── infra_target # this is for Target Account
-│   ├── main.tf
-│   └── variables.tf
+│   ├── main.tf
+│   └── variables.tf
 ├── sample # sample app to get you start
-│   ├── README.md
-│   ├── apps
-│   │   └── main.tf
-│   ├── run.sh
-│   └── teardown.sh
+│   ├── README.md
+│   ├── apps
+│   │   └── main.tf
+│   ├── run.sh
+│   └── teardown.sh
 └── src
     └── *.py
 ```
